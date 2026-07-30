@@ -1,0 +1,26 @@
+<main class="relative h-full flex overflow-hidden">
+  <button
+    class="absolute left-2 top-2 z-20 rounded-md border bg-background p-1.5 shadow-sm lg:hidden"
+    (click)="sidebarOpen.set(!sidebarOpen())"
+  >
+    @if (sidebarOpen()) {
+      <app-icon-mapvx name="matClose" class="center-content"/>
+    } @else {
+      <app-icon-mapvx name="matMenu" class="center-content"/>
+    }
+  </button>
+
+  @if (sidebarOpen()) {
+    <div
+      class="absolute inset-0 z-9 bg-black/30 lg:hidden"
+      (click)="sidebarOpen.set(false)"
+    ></div>
+  }
+
+  <app-vehicles
+    class="absolute inset-y-0 left-0 z-10 w-80 border-r bg-background transition-transform lg:relative lg:translate-x-0"
+    [class.-translate-x-full]="!sidebarOpen()"
+  />
+
+  <app-map class="flex-1 min-w-0" />
+</main>

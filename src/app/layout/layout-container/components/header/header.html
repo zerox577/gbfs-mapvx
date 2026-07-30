@@ -1,0 +1,14 @@
+<header class="flex items-center justify-between bg-slate-900 p-4 text-white shadow-md lg:p-6 dark:bg-black">
+  <div>
+    <h1 class="text-xl font-bold">GBFS MapVX</h1>
+    <p class="text-sm text-slate-400 dark:text-slate-500">Visualizador en tiempo real</p>
+  </div>
+
+  <button hlmBtn variant="outline" size="icon" (click)="theme.toggle()" class="border-white/20 text-white hover:bg-white/10 bg-transparent">
+    @if (isDark()) {
+      <app-icon-mapvx name="heroSun" class="center-content"/>
+    } @else {
+      <app-icon-mapvx name="heroMoon" class="center-content"/>
+    }
+  </button>
+</header>
