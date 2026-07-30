@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GBFS MapVX</string>
+    <string name="title_activity_main">GBFS MapVX</string>
+    <string name="package_name">com.mapvx.gbfs</string>
+    <string name="custom_url_scheme">com.mapvx.gbfs</string>
+</resources>
