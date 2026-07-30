@@ -1,0 +1,9 @@
+{
+  "/api": {
+    "target": "https://gbfs.citibikenyc.com",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": { "^/api": "" },
+    "logLevel": "debug"
+  }
+}
