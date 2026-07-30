@@ -1,0 +1,149 @@
+<div class="flex h-full flex-col">
+  <div class="border-b px-4 py-2">
+    <div class="mb-2 flex items-center justify-between">
+      <p class="text-sm text-muted-foreground">
+        Vehículos: <span class="font-semibold">{{ vehicleCount() }}</span>
+      </p>
+      @if (lastUpdated(); as ts) {
+        <p class="text-[10px] text-muted-foreground">
+          {{ ts | date:'HH:mm:ss' }}
+        </p>
+      }
+    </div>
+    <input
+      type="text"
+      placeholder="Buscar por ID o tipo..."
+      class="w-full rounded-md border border-input bg-background px-3 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      [ngModel]="filterQuery()"
+      (ngModelChange)="filterQuery.set($event)"
+    />
+  </div>
+
+  @if (selectedVehicle(); as vehicle) {
+    <div class="border-b bg-card p-4">
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="font-mono text-sm font-bold">{{ vehicle.bike_id }}</h3>
+        <button
+          class="text-xs text-muted-foreground hover:text-foreground"
+          (click)="selectVehicle(null)"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      <div class="mb-2 flex items-center gap-2">
+        <span
+          class="inline-block h-3 w-3 rounded-full"
+          [class.bg-green-500]="!vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-yellow-500]="vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-red-500]="vehicle.is_disabled"
+        ></span>
+        <span class="text-sm font-medium">
+          @if (vehicle.is_disabled) {
+            Deshabilitada
+          } @else if (vehicle.is_reserved) {
+            Reservada
+          } @else {
+            Disponible
+          }
+        </span>
+      </div>
+
+      <dl class="space-y-1 text-xs">
+        <div class="flex justify-between">
+          <dt class="text-muted-foreground">Latitud</dt>
+          <dd class="font-mono">{{ vehicle.lat.toFixed(6) }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-muted-foreground">Longitud</dt>
+          <dd class="font-mono">{{ vehicle.lon.toFixed(6) }}</dd>
+        </div>
+        @if (vehicle.vehicle_type) {
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Tipo</dt>
+            <dd class="flex items-center gap-1">
+              <app-icon-mapvx [name]="typeIcon(vehicle.vehicle_type)" size="18px" />
+              {{ vehicle.vehicle_type }}
+            </dd>
+          </div>
+        }
+        @if (vehicle.current_range_meters != null) {
+          <div class="flex justify-between">
+            <dt class="text-muted-foreground">Autonomía</dt>
+            <dd>{{ (vehicle.current_range_meters / 1000).toFixed(1) }} km</dd>
+          </div>
+        }
+      </dl>
+    </div>
+  }
+
+  @if (error(); as msg) {
+    <div class="flex items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      <span class="flex-1">{{ msg }}</span>
+      <button
+        class="rounded bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+        (click)="retry()"
+      >
+        Reintentar
+      </button>
+    </div>
+  }
+
+  <div class="flex-1 divide-y overflow-y-auto mask-[linear-gradient(to_bottom,transparent_0%,black_8px,black_calc(100%-8px),transparent_100%)]">
+    @if (loading() && filteredVehicles().length === 0) {
+      @for (_ of [1,2,3,4,5]; track _) {
+        <div class="flex animate-pulse items-center gap-2 px-4 py-2.5">
+          <span class="inline-block h-2.5 w-2.5 rounded-full bg-muted"></span>
+          <span class="inline-block h-3 w-16 rounded bg-muted"></span>
+          <span class="ml-auto inline-block h-3 w-20 rounded bg-muted"></span>
+        </div>
+      }
+    } @else {
+      @for (vehicle of filteredVehicles(); track vehicle.bike_id) {
+      <button
+        class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors hover:bg-accent"
+        [class.bg-accent]="vehicle.bike_id === selectedVehicleId()"
+        (click)="selectVehicle(vehicle.bike_id)"
+      >
+        <span
+          class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          [class.bg-green-500]="!vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-yellow-500]="vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-red-500]="vehicle.is_disabled"
+        ></span>
+        <span
+          class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
+          [class.bg-green-100]="!vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-yellow-100]="vehicle.is_reserved && !vehicle.is_disabled"
+          [class.bg-red-100]="vehicle.is_disabled"
+          [class.text-green-700]="!vehicle.is_reserved && !vehicle.is_disabled"
+          [class.text-yellow-700]="vehicle.is_reserved && !vehicle.is_disabled"
+          [class.text-red-700]="vehicle.is_disabled"
+        >
+          @if (vehicle.is_disabled) {
+            Desh.
+          } @else if (vehicle.is_reserved) {
+            Res.
+          } @else {
+            Disp.
+          }
+        </span>
+        <app-icon-mapvx
+          [name]="typeIcon(vehicle.vehicle_type)"
+          size="16px"
+          class="shrink-0"
+        />
+        <span class="truncate font-mono text-xs">{{ vehicle.bike_id }}</span>
+      </button>
+    } @empty {
+      <div class="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        @if (filterQuery().trim().length > 0) {
+          No hay vehículos que coincidan con "<span class="font-mono">{{ filterQuery() }}</span>"
+        } @else {
+          No hay vehículos disponibles
+        }
+      </div>
+    }
+    }
+  </div>
+</div>
