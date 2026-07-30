@@ -20,6 +20,25 @@ El proyecto quedó con un gusto a "quiero más" y eso creo que es buena señal.
 
 El feed de Citi Bike (`free_bike_status.json`) es un archivo estático que el servidor sobrescribe cada cierto tiempo. No hay una conexión persistente (WebSocket ni SSE), así que la aplicación usa **polling**: consulta el endpoint cada 10 segundos para detectar cambios. Esto mantiene el mapa sincronizado con la realidad sin saturar la red ni bloquear la UI.
 
+## Requisitos de entorno
+
+- Node.js 22+
+- npm 10+
+- Angular CLI 22 (`npm install -g @angular/cli@22`)
+
+## Instalación y ejecución
+
+```bash
+git clone <repo-url>
+cd gbfs-mapvx
+npm install
+ng serve              # http://localhost:4200
+ng build              # build producción en dist/
+ng test               # tests unitarios (72 tests)
+```
+
+En desarrollo, el proxy redirige `/api/*` a `https://gbfs.citibikenyc.com` para evitar CORS.
+
 ## Stack
 
 | Tecnología | Uso |
@@ -29,17 +48,32 @@ El feed de Citi Bike (`free_bike_status.json`) es un archivo estático que el se
 | **spartan/ui** | Componentes de UI basados en brn |
 | **ng icons** | Iconos |
 | **MapLibre GL JS** | Mapa interactivo con capas GeoJSON |
-| **Lottie-web** | Animaciones splash (detalle de fina coquetería) |
+| **Lottie-web** | Animaciones splash (carga lazy) |
 | **Capacitor** | Preparado para alcance mobile |
 | **Vitest** | Tests unitarios |
 
-## Comandos
+## Decisiones de arquitectura y trade-offs
 
-```bash
-ng serve              # dev en http://localhost:4200
-ng build              # build producción
-ng test               # tests unitarios (72 tests)
-```
+- **Standalone components** — Angular 22 marca standalone como default. Sin NgModules, estructura más plana y treeshakeable.
+- **Signal store** — Usamos signals en lugar de RxJS para el estado de vehículos. Menos boilerplate, reactividad fina, sin unsubscribe.
+- **Dynamic import de lottie-web** — `lottie-web` (~308 KB) se carga con `import()` lazy solo cuando el splash se inicializa, no en el bundle inicial. Como contraparte, hay un pequeño delay al mostrar la animación.
+- **Stubs en tests** — Los tests usan componentes stub en lugar de `CUSTOM_ELEMENTS_SCHEMA` para evitar falsos negativos de Angular (`NG0951`). Esto hace los tests más precisos pero requiere mantener los stubs al día.
+- **Proxy en desarrollo** — Se usa `proxy.conf.json` para evitar CORS. No aplica en producción porque el API de Citi Bike no requiere autenticación.
+- **Polling vs WebSocket** — La API de Citi Bike expone archivos JSON estáticos, no WebSockets. Polling cada 10s es la opción más simple y confiable; para datos realmente en tiempo real se necesitaría un middleware que consuma GBFS y emita por SSE.
+
+## Limitaciones conocidas
+
+- Los marcadores en el mapa se renderizan todos simultáneamente. Con cientos de vehículos sería necesario clustering.
+- El polling cada 10 segundos puede no ser suficiente en horas pico si el feed se actualiza más rápido.
+- `lottie-web` es CommonJS, no ESM. Angular lo advierte en build porque impide optimizaciones avanzadas.
+
+## Mejoras futuras
+
+- Agrupar vehículos por clusters de MapLibre para mejor rendimiento con flotas grandes.
+- Reemplazar `lottie-web` con `lottie-web-light` o `@lottiefiles/dotlottie` (versiones ESM nativas).
+- Agregar geolocalización del usuario con `navigator.geolocation` para centrar el mapa en su ubicación.
+- Agregar Capacitor nativo con plugins de GPS y cámara.
+- Migrar a WebSocket + Server-Sent Events si el proveedor lo soporta.
 
 ## Disclaimer
 
