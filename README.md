@@ -39,6 +39,24 @@ ng test               # tests unitarios (72 tests)
 
 En desarrollo, el proxy redirige `/api/*` a `https://gbfs.citibikenyc.com` para evitar CORS.
 
+## Build APK con Capacitor
+
+```bash
+ng build                        # genera dist/gbfs-mapvx
+npx cap sync android            # copia web assets al proyecto Android
+npx cap open android            # abre Android Studio para build manual
+# o build directo desde CLI:
+cd android && ./gradlew assembleDebug  # genera app-debug.apk
+```
+
+Para APK firmado de producción:
+
+```bash
+cd android && ./gradlew assembleRelease
+```
+
+Para desarrollo con live reload en el dispositivo: descomentar `server.url` en `capacitor.config.ts` apuntando a la IP local (`http://192.168.x.x:4200`) con `cleartext: true`. Para producción, comentar `server.url` para que cargue los assets locales.
+
 ## Stack
 
 | Tecnología | Uso |
@@ -49,7 +67,7 @@ En desarrollo, el proxy redirige `/api/*` a `https://gbfs.citibikenyc.com` para 
 | **ng icons** | Iconos |
 | **MapLibre GL JS** | Mapa interactivo con capas GeoJSON |
 | **Lottie-web** | Animaciones splash (carga lazy) |
-| **Capacitor** | Preparado para alcance mobile |
+| **Capacitor** | APK nativo Android |
 | **Vitest** | Tests unitarios |
 
 ## Decisiones de arquitectura y trade-offs
