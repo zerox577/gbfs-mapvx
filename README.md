@@ -31,18 +31,22 @@ El consumo se dispara desde el constructor del store (no desde un componente). C
 
 - Node.js 22+
 - npm 10+
-- Angular CLI 22 (`npm install -g @angular/cli@22`)
 
 ## Instalación y ejecución
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/zerox577/gbfs-mapvx.git
 cd gbfs-mapvx
+nvm use               # opcional: .nvmrc incluido
 npm install
-ng serve              # http://localhost:4200
-ng build              # build producción en dist/
-ng test               # tests unitarios (72 tests, 13 suites)
+npm run start          # http://localhost:4200
+# o directamente:
+ng serve               # vía node_modules/.bin, sin global install
+ng build               # build producción en dist/
+ng test                # tests unitarios (72 tests, 13 suites)
 ```
+
+No requiere Angular CLI instalado globalmente — todo se resuelve desde `node_modules/.bin`.
 
 En desarrollo, el proxy redirige `/api/gbfs` a `https://gbfs.citibikenyc.com` para evitar CORS sin extensiones de navegador ni backend propio.
 
