@@ -18,7 +18,14 @@ El proyecto quedó con un gusto a "quiero más" y eso creo que es buena señal.
 
 ## Sobre el polling
 
-El feed de Citi Bike (`free_bike_status.json`) es un archivo estático que el servidor sobrescribe cada cierto tiempo. No hay una conexión persistente (WebSocket ni SSE), así que la aplicación usa **polling**: consulta el endpoint cada 10 segundos para detectar cambios. Esto mantiene el mapa sincronizado con la realidad sin saturar la red ni bloquear la UI.
+El feed de Citi Bike (`free_bike_status.json`) devuelve un JSON estático que el servidor actualiza periódicamente. No hay WebSocket ni SSE, así que la aplicación usa **polling**. La implementación está en `VehicleStore.startPolling()`:
+
+- **`timer(0, 30000)`** — primera consulta inmediata, luego cada 30 segundos. El intervalo se basa en el `ttl` que la API suele devolver.
+- **`switchMap`** — si una llamada tarda más de 30s, se cancela la anterior y solo queda una activa. Evita acumulación de peticiones.
+- **`catchError`** — ante fallo de red, asigna el `error` signal para que la UI muestre el mensaje con botón reintentar.
+- **`takeUntilDestroyed`** — la suscripción se limpia automáticamente al destruirse el store.
+
+El consumo se dispara desde el constructor del store (no desde un componente). Como está en `providedIn: 'root'`, arranca al abrir la app y cualquier componente solo lee signals. Esto centraliza el polling y evita duplicar llamadas si dos componentes necesitan vehículos.
 
 ## Requisitos de entorno
 
@@ -34,10 +41,10 @@ cd gbfs-mapvx
 npm install
 ng serve              # http://localhost:4200
 ng build              # build producción en dist/
-ng test               # tests unitarios (72 tests)
+ng test               # tests unitarios (72 tests, 13 suites)
 ```
 
-En desarrollo, el proxy redirige `/api/*` a `https://gbfs.citibikenyc.com` para evitar CORS.
+En desarrollo, el proxy redirige `/api/gbfs` a `https://gbfs.citibikenyc.com` para evitar CORS sin extensiones de navegador ni backend propio.
 
 ## Build APK con Capacitor
 
@@ -55,44 +62,91 @@ Para APK firmado de producción:
 cd android && ./gradlew assembleRelease
 ```
 
-Para desarrollo con live reload en el dispositivo: descomentar `server.url` en `capacitor.config.ts` apuntando a la IP local (`http://192.168.x.x:4200`) con `cleartext: true`. Para producción, comentar `server.url` para que cargue los assets locales.
+Capacitor permite que esta misma app Angular funcione como web y como app nativa sin cambiar una línea de código de la UI. Las APIs nativas (GPS, cámara) se consumen vía plugins de Capacitor manteniendo el mismo código base.
 
 ## Stack
 
 | Tecnología | Uso |
 |---|---|
 | **Angular 22** | Framework principal, standalone components |
-| **TailwindCSS** | Estilos utilitarios |
+| **TailwindCSS v4** | Estilos utilitarios |
 | **spartan/ui** | Componentes de UI basados en brn |
-| **ng icons** | Iconos |
+| **ng icons** | Iconos de vehículos |
 | **MapLibre GL JS** | Mapa interactivo con capas GeoJSON |
-| **Lottie-web** | Animaciones splash (carga lazy) |
+| **Lottie-web** | Animación splash (carga lazy) |
 | **Capacitor** | APK nativo Android |
 | **Vitest** | Tests unitarios |
+| **@types/geojson** | Tipado para FeatureCollection del mapa |
 
 ## Decisiones de arquitectura y trade-offs
 
-- **Standalone components** — Angular 22 marca standalone como default. Sin NgModules, estructura más plana y treeshakeable.
-- **Signal store** — Usamos signals en lugar de RxJS para el estado de vehículos. Menos boilerplate, reactividad fina, sin unsubscribe.
-- **Dynamic import de lottie-web** — `lottie-web` (~308 KB) se carga con `import()` lazy solo cuando el splash se inicializa, no en el bundle inicial. Como contraparte, hay un pequeño delay al mostrar la animación.
-- **Stubs en tests** — Los tests usan componentes stub en lugar de `CUSTOM_ELEMENTS_SCHEMA` para evitar falsos negativos de Angular (`NG0951`). Esto hace los tests más precisos pero requiere mantener los stubs al día.
-- **Proxy en desarrollo** — Se usa `proxy.conf.json` para evitar CORS. No aplica en producción porque el API de Citi Bike no requiere autenticación.
-- **Polling vs WebSocket** — La API de Citi Bike expone archivos JSON estáticos, no WebSockets. Polling cada 10s es la opción más simple y confiable; para datos realmente en tiempo real se necesitaría un middleware que consuma GBFS y emita por SSE.
+**Standalone components** — Angular 22 marca standalone como default. Sin NgModules, estructura más plana y treeshakeable.
+
+**Signals para estado** — el store usa `signal`, `computed` y `effect` en lugar de RxJS BehaviorSubjects. Señales son síncronas y no requieren suscripciones ni unsubscribe. RxJS se reserva solo para el polling HTTP donde su ecosistema de operadores sigue siendo superior (`timer`, `switchMap`, `catchError`).
+
+**Effects con Angular** — los `effect()` en `MapComponent` reaccionan a cambios en el store:
+- Cuando `store.vehicles()` cambia → `updateMapVehicles()` actualiza la fuente GeoJSON.
+- Cuando `store.selectedVehicleId()` cambia → highlight y popup se sincronizan.
+- Cuando `store.selectedVehicle()` cambia → `flyTo()` centra el mapa.
+
+Estos effects son la columna vertebral de la sincronización mapa ↔ lista. Se ejecutan automáticamente sin necesidad de eventos manuales ni suscripciones.
+
+**Mapa desacoplado y segmentado** — el mapa no es un monolito. Se dividió en:
+
+| Archivo | Rol |
+|---|---|
+| `map.ts` | Ciclo de vida, orquestación, interacciones |
+| `config-map/index.ts` | Constantes: style URL, centros, zoom, colores, IDs |
+| `custom-svg/index.ts` | 3 iconos SDF para símbolos (bike, ebike, scooter) |
+| `popup-map/popup-content.ts` | HTML del popup como función pura |
+
+Esto permite cambiar el style URL, reemplazar iconos o probar `popupContent` sin tocar el componente ni instanciar MapLibre.
+
+**Proxy en desarrollo** — `proxy.conf.json` redirige `/api/gbfs` a la API de Citi Bike. En producción no hace falta porque el browser consulta directamente la URL pública. Se eligió proxy en lugar de modificar CORS porque no controlamos la API.
+
+**Mock data** — durante el desarrollo, la API de Citi Bike respondía varias veces con `bikes: []` (array vacío). Sin datos no se podía desarrollar ni testear visualmente. Se creó `mock-vehicles.data.ts` con 40 vehículos en Manhattan variando tipos (bike, ebike, scooter) y estados (disponible, reservada, deshabilitada). El servicio (`VehicleApiService`) usa el mock como fallback: si la API devuelve 0 vehículos, retorna el mock. También permite desarrollo offline.
+
+**Personalización del mapa con SVGs** — los iconos del mapa no son los default de MapLibre. Se crearon 3 SVGs a medida:
+- `BIKE_SVG`: bicicleta clásica (sin caballete final).
+- `EBIKE_SVG`: ciclomotor/moped.
+- `SCOOTER_SVG`: scooter de pie.
+
+Se renderizan como SDF (Signed Distance Field), lo que permite a MapLibre aplicarles `icon-color` por tipo de vehículo en tiempo real, reutilizando una sola imagen por tipo sin importar el color.
+
+**Lottie splash** — `lottie-web` se carga con `import()` dinámico lazy (~65 KB gzipped) solo cuando el splash se muestra. Como contraparte, hay un pequeño delay inicial y `lottie-web` es CommonJS (genera warning de optimization bailout). Alternativas futuras: `@lottiefiles/dotlottie` (ESM nativo).
+
+**Dynamic import de lottie-web** — `lottie-web` (~308 KB) se carga con `import()` lazy solo cuando el splash se inicializa, no en el bundle inicial. Como contraparte, hay un pequeño delay al mostrar la animación.
+
+**Stubs en tests** — Los tests usan componentes stub en lugar de `CUSTOM_ELEMENTS_SCHEMA` para evitar falsos negativos de Angular (`NG0951`). Esto hace los tests más precisos pero requiere mantener los stubs al día.
+
+**CartoDB Voyager como style del mapa** — `https://demotiles.maplibre.org/style.json` es funcional pero muy básico (sin nombres de calles). CartoDB Voyager es gratuito, liviano y con nomenclatura urbana, similar a Google Maps. Alternativas como MapTiler o Stadia requieren API key.
+
+**Web worker de MapLibre** — MapLibre v6 usa un worker (`maplibre-gl-worker.mjs`) para renderizado paralelo. Angular/Vite no lo copia automáticamente al output. Sin él, el mapa se ve en blanco. Se configuró en `angular.json`:
+```json
+{ "glob": "maplibre-gl-worker.mjs", "input": "node_modules/maplibre-gl/dist", "output": "/" }
+```
 
 ## Limitaciones conocidas
 
-- Los marcadores en el mapa se renderizan todos simultáneamente. Con cientos de vehículos sería necesario clustering.
-- El polling cada 10 segundos puede no ser suficiente en horas pico si el feed se actualiza más rápido.
-- `lottie-web` es CommonJS, no ESM. Angular lo advierte en build porque impide optimizaciones avanzadas.
+- **API devuelve array vacío**: en ocasiones Citi Bike responde con `bikes: []`. El mock data es un parche; una solución definitiva sería consumir múltiples feeds GBFS o tener un middleware que normalice.
+- **Sin soporte offline**: la app requiere conexión para cargar tiles del mapa (CartoDB) y datos GBFS.
+- **Polling fijo**: el intervalo es fijo a 30s. Idealmente debería respetar el `ttl` que devuelve cada respuesta.
+- **Sin clustering**: todos los vehículos se renderizan como puntos individuales. Con >500 vehículos visibles el rendimiento puede degradarse.
+- **Cobertura de tests en templates**: las `.html` de Angular tienen cobertura parcial porque el template engine escapa al análisis de v8.
+- **`lottie-web` no es ESM**: CommonJS, genera warning de build. Alternativa: `@lottiefiles/dotlottie`.
+- **Sin geolocalización**: el mapa no se centra automáticamente en la ubicación del usuario.
 
 ## Mejoras futuras
 
-- Agrupar vehículos por clusters de MapLibre para mejor rendimiento con flotas grandes.
-- Reemplazar `lottie-web` con `lottie-web-light` o `@lottiefiles/dotlottie` (versiones ESM nativas).
-- Agregar geolocalización del usuario con `navigator.geolocation` para centrar el mapa en su ubicación.
-- Agregar Capacitor nativo con plugins de GPS y cámara.
-- Migrar a WebSocket + Server-Sent Events si el proveedor lo soporta.
+- Clustering de MapLibre para flotas grandes.
+- Geolocalización del usuario con `navigator.geolocation`.
+- Respetar `ttl` dinámico de la API en lugar de intervalo fijo.
+- Migrar a `@lottiefiles/dotlottie` (ESM nativo).
+- PWA + service worker para cachear tiles y datos recientes.
+- WebSocket/SSE si el proveedor lo soporta.
+- Tests e2e con Cypress o Playwright.
+- CI/CD con GitHub Actions.
 
 ## Disclaimer
 
-Usé IA y documentación web como apoyo para explorar alternativas de diseño y buenas prácticas. Todo el código pasó por revisión y pruebas. No tengo problema en defender cada línea.
+Usé IA y documentación web como apoyo para explorar alternativas de diseño y buenas prácticas. Todo el código pasó por revisión y pruebas. No tengo problema en defender cada línea. Siendo mi primera vez con MapLibre, consulté a la IA para: elegir un style de mapa similar a Google Maps, generar los SVGs personalizados, obtener la animación Lottie para el splash, y ayuda con tests unitarios repetitivos. La arquitectura general, el uso de signals, la estructura de directorios y el boceto del layout fueron decisiones autónomas. Y ayudarme con la creacion de este readme.md veo que resalta Migrar a `@lottiefiles/dotlottie` (ESM nativo) cuando siempre vengo de usar lottie-web lo cual tendre en cuenta si continuo en el proceso de seleccion, Tambien debo reconocer que IA me ayudo mucho con la clases de tailwindcss a usar en este desafio y mejorar mis estilos. Esa funcion de dark/ligh aprendi con ia a implementarla.
