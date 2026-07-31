@@ -1,3 +1,5 @@
+// Map tiles (C) CartoDB — https://carto.com/attributions
+// Data (C) Citi Bike GBFS feed — https://gbfs.citibikenyc.com/gbfs/2/gbfs
 export const MAP_STYLE_URL = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 export const DEFAULT_CENTER: [number, number] = [-74.006, 40.7128];
 export const DEFAULT_ZOOM = 13;
