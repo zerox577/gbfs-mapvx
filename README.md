@@ -126,6 +126,13 @@ Se renderizan como SDF (Signed Distance Field), lo que permite a MapLibre aplica
 { "glob": "maplibre-gl-worker.mjs", "input": "node_modules/maplibre-gl/dist", "output": "/" }
 ```
 
+## Atribuciones
+
+- **Map tiles:** [CartoDB Voyager](https://carto.com/attributions) — © CARTO, © OpenStreetMap contributors
+- **Datos de vehículos:** [Citi Bike GBFS](https://gbfs.citibikenyc.com/gbfs/2/gbfs) — © Lyft / Citi Bike
+- **Iconos:** SVGs personalizados generados como SDF para MapLibre
+- **Animación splash:** Archivo Lottie de dominio público (modificado para colores del tema oscuro)
+
 ## Limitaciones conocidas
 
 - **API devuelve array vacío**: en ocasiones Citi Bike responde con `bikes: []`. El mock data es un parche; una solución definitiva sería consumir múltiples feeds GBFS o tener un middleware que normalice.
